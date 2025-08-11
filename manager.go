@@ -2,28 +2,42 @@ package broadcaster
 
 import (
 	"context"
-	"log/slog"
 	"sync"
 )
 
 type Manager struct {
+	// pubsub is the pub/sub client used for communication
 	pubsub PubSub
-	logger *slog.Logger
 
+	// activeBroadcasters maps channel names to their respective broadcaster instances
 	activeBroadcasters map[string]*broadcaster
-	broadcasterMu      sync.RWMutex
+	// broadcasterMu protects access to the activeBroadcasters map
+	broadcasterMu sync.RWMutex
+	// disconnectChan receives signals from broadcasters that are ready to be removed
+	disconnectChan chan string
 
-	serviceCtx    context.Context
+	// serviceCtx is the context for the manager's services
+	serviceCtx context.Context
+	// serviceCancel is the cancel function for the serviceCtx
 	serviceCancel context.CancelFunc
 }
 
-func NewManager(pubsub PubSub, l *slog.Logger) *Manager {
+func NewManager(pubsub PubSub) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Manager{
+	m := &Manager{
 		pubsub:             pubsub,
 		activeBroadcasters: make(map[string]*broadcaster),
+		disconnectChan:     make(chan string),
 		serviceCtx:         ctx,
 		serviceCancel:      cancel,
+	}
+	go m.listenForDisconnects()
+	return m
+}
+
+func (s *Manager) listenForDisconnects() {
+	for channel := range s.disconnectChan {
+		s.RemoveBroadcaster(channel)
 	}
 }
 
@@ -31,14 +45,13 @@ func (s *Manager) ServiceContext() context.Context {
 	return s.serviceCtx
 }
 
-func (s *Manager) AddClient(channel string, clientID int) <-chan []byte {
-	s.broadcasterMu.RLock()
+func (s *Manager) RegisterClient(channel string, clientID int) <-chan []byte {
+	s.broadcasterMu.Lock()
+	defer s.broadcasterMu.Unlock()
 	sb, ok := s.activeBroadcasters[channel]
-	s.broadcasterMu.RUnlock()
 
 	if !ok {
-		onEmpty := func(c string) { s.RemoveBroadcaster(c) }
-		sb = NewBroadcaster(channel, s.pubsub, s.logger, onEmpty)
+		sb = NewBroadcaster(channel, s.pubsub, s.disconnectChan)
 
 		s.activeBroadcasters[channel] = sb
 		sb.Start(s.serviceCtx)
@@ -46,7 +59,7 @@ func (s *Manager) AddClient(channel string, clientID int) <-chan []byte {
 	return sb.AddClient(clientID)
 }
 
-func (s *Manager) RemoveClient(channel string, clientID int) {
+func (s *Manager) UnregisterClient(channel string, clientID int) {
 	s.broadcasterMu.RLock()
 	sb, ok := s.activeBroadcasters[channel]
 	s.broadcasterMu.RUnlock()
@@ -59,8 +72,6 @@ func (s *Manager) RemoveBroadcaster(channel string) {
 	s.broadcasterMu.Lock()
 	delete(s.activeBroadcasters, channel)
 	s.broadcasterMu.Unlock()
-
-	s.logger.Info("Broadcaster removed due to no active clients.", slog.String("channel", channel))
 }
 
 func (s *Manager) Stop() {
@@ -71,5 +82,4 @@ func (s *Manager) Stop() {
 		delete(s.activeBroadcasters, channel)
 	}
 	s.broadcasterMu.Unlock()
-	s.logger.Info("manager stopped all broadcasters.")
 }

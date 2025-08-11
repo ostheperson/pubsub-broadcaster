@@ -3,43 +3,42 @@ package broadcaster
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"runtime/debug"
 	"sync"
 	"time"
 )
 
 type broadcaster struct {
 	channel string
-	pubsub  PubSub
-	l       *slog.Logger
+	wg      sync.WaitGroup
 
+	// pubsub is the pub/sub client used for communication
+	pubsub PubSub
+
+	// clientChannels maps client IDs to their respective data channels
 	clientChannels map[int]chan []byte
 	clientMu       sync.RWMutex
-	stopChan       chan struct{}
-	disconnect     func(string)
-	wg             sync.WaitGroup
+
+	// stopChan is used to signal the broadcaster's internal goroutine to stop
+	stopChan chan struct{}
+	// disconnectChan is used to signal the manager that this broadcaster can be removed
+	disconnectChan chan<- string
 }
 
 const (
 	initialBackoff = 1 * time.Second
-
-	maxBackoff = 1 * time.Minute
+	maxBackoff     = 1 * time.Minute
 )
 
 func NewBroadcaster(
 	channel string,
 	pubsub PubSub,
-	l *slog.Logger,
-	disconnect func(string),
+	disconnectChan chan<- string,
 ) *broadcaster {
 	return &broadcaster{
-		channel: channel,
-		pubsub:  pubsub,
-		l:       l.With(slog.String("channel", channel)),
-
+		channel:        channel,
+		pubsub:         pubsub,
 		clientChannels: make(map[int]chan []byte),
-		disconnect:     disconnect,
+		disconnectChan: disconnectChan,
 		stopChan:       make(chan struct{}),
 	}
 }
@@ -59,30 +58,30 @@ func (sb *broadcaster) AddClient(id int) <-chan []byte {
 
 func (sb *broadcaster) RemoveClient(id int) {
 	sb.clientMu.Lock()
+	defer sb.clientMu.Unlock()
 	if client, ok := sb.clientChannels[id]; ok {
 		close(client)
+		delete(sb.clientChannels, id)
 	}
-	delete(sb.clientChannels, id)
-	sb.clientMu.Unlock()
+
 	if len(sb.clientChannels) == 0 {
-		if sb.disconnect != nil {
-			sb.disconnect(sb.channel)
-		}
+		sb.disconnectChan <- sb.channel
 	}
 }
 
 func (sb *broadcaster) Stop() {
 	close(sb.stopChan)
 	sb.wg.Wait()
+
+	sb.clientMu.Lock()
+	defer sb.clientMu.Unlock()
+	for _, ch := range sb.clientChannels {
+		close(ch)
+	}
 }
 
 func (sb *broadcaster) listen(ctx context.Context) {
-	defer func() {
-		sb.wg.Done()
-		if r := recover(); r != nil {
-			sb.l.Error("Panic recovered in broadcaster", "error", r, "stack", string(debug.Stack()))
-		}
-	}()
+	defer sb.wg.Done()
 
 	backoff := initialBackoff
 	for {
@@ -94,12 +93,10 @@ func (sb *broadcaster) listen(ctx context.Context) {
 		default:
 		}
 
-		sb.l.Info("attempting subscription...")
-		pubsubClient := sb.pubsub.SubscribeWithChannel(ctx, sb.channel)
+		pubsubClient := sb.pubsub.Subscribe(ctx, sb.channel)
 		defer pubsubClient.Close()
 
 		if err := sb.processMessage(ctx, pubsubClient); err != nil {
-			sb.l.Warn("subscription lost, attempting to reconnect", "error", err)
 			time.Sleep(backoff)
 			backoff *= 2
 			if backoff > maxBackoff {
@@ -124,11 +121,6 @@ func (sb *broadcaster) processMessage(ctx context.Context, pubsubClient PubSubCl
 				select {
 				case clientChan <- []byte(msg.Payload):
 				case <-time.After(100 * time.Millisecond):
-					sb.l.Warn(
-						"Timeout sending update to a client",
-						slog.String("channel", sb.channel),
-					)
-
 				}
 			}
 

@@ -14,24 +14,17 @@ type redisClient struct {
 }
 
 func NewRedisClient(addr, pw string) *redisClient {
-	rdb := redis.NewClient(&redis.Options{
+	return &redisClient{client: redis.NewClient(&redis.Options{
 		Addr:        addr,
 		PoolTimeout: 5 * time.Second,
 		Password:    pw,
 		DB:          0,
 		PoolSize:    10,
-	})
-	return &redisClient{client: rdb}
+	})}
 }
 
 func (rpsc *redisClient) GetClient() *redis.Client {
 	return rpsc.client
-}
-
-func (rpsc *redisClient) Ping() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return rpsc.client.Ping(ctx).Err()
 }
 
 func (r *redisClient) Close() {
@@ -54,30 +47,7 @@ func (rpsc *redisClient) Publish(
 	return nil
 }
 
-func (rpsc *redisClient) SubscribeWithHandler(
-	ctx context.Context,
-	channel string,
-	handler func(ctx context.Context, payload []byte) error,
-) error {
-	pubsub := rpsc.client.PSubscribe(ctx, channel)
-	defer pubsub.Close()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case msg, ok := <-pubsub.Channel():
-			if !ok {
-				return fmt.Errorf("redis subscription channel closed")
-			}
-			if err := handler(ctx, []byte(msg.Payload)); err != nil {
-				return err
-			}
-		}
-	}
-}
-
-func (rpsc *redisClient) SubscribeWithChannel(
+func (rpsc *redisClient) Subscribe(
 	ctx context.Context,
 	channel string,
 ) PubSubClient {

@@ -2,7 +2,6 @@ package broadcaster
 
 import (
 	"context"
-	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -38,11 +37,7 @@ func (t *mockPubSub) Publish(ctx context.Context, channel string, payload any) e
 	return nil
 }
 
-func (t *mockPubSub) SubscribeWithHandler(ctx context.Context, channel string, handler func(ctx context.Context, payload []byte) error) error {
-	return nil
-}
-
-func (m *mockPubSub) SubscribeWithChannel(ctx context.Context, channel string) PubSubClient {
+func (m *mockPubSub) Subscribe(ctx context.Context, channel string) PubSubClient {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -63,11 +58,9 @@ func (m *mockPubSub) SubscribeWithChannel(ctx context.Context, channel string) P
 
 func TestBroadcaster_HandleRedisDisconnectAndReconnect(t *testing.T) {
 	mockPbs := &mockPubSub{}
-	logger := slog.New(slog.Default().Handler())
 	channel := "test_channel"
-	onEmpty := func(s string) {}
 
-	b := NewBroadcaster(channel, mockPbs, logger, onEmpty)
+	b := NewBroadcaster(channel, mockPbs, make(chan<- string))
 	clientChan := b.AddClient(1)
 	b.Start(context.Background())
 
