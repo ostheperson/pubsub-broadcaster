@@ -1,6 +1,7 @@
 # Pub/Sub Broadcaster
 
-A simple Go library for fanning out Pub/Sub messages to many clients.
+A simple Go library for fanning out Pub/Sub messages to many clients. Following the principle of letting worker crash in a controlled way.
+
 
 ## What It Does
 
@@ -10,18 +11,13 @@ A simple Go library for fanning out Pub/Sub messages to many clients.
 ## How It Works
 
 1.  Client connects.
-2.  You ask the `Manager` for a channel for a topic (e.g., `game-1`).
+2.  You ask the `Manager` for a channel for a topic (e.g., `topic-1`).
 3.  `Manager` finds or makes a `broadcaster` for that topic.
 4.  `Broadcaster` sends messages from the pub/sub system to all clients on that topic.
 
 ## Supported Pub/Sub Systems
 
-*   [x] Redis
-
-others require making adapter 
-*   [ ] RabbitMQ
-*   [ ] Kafka
-*   [ ] NATS
+*   [x] any system that can implement pubsub interface
 
 ## Resilience and Error Handling
 
@@ -34,13 +30,6 @@ The system is designed to be robust and handle common failures gracefully.
 *   **Resource Management:** If a broadcaster loses its last client, it automatically shuts down its pub/sub subscription and signals the manager to be removed.
 
 *   **Graceful Shutdown:** The entire system can be shut down cleanly, ensuring all connections are closed and goroutines are terminated without leaks.
-
-## Use It For
-
-*   Live Chat
-*   Sports Score Updates
-*   IoT Dashboards
-*   Anything real-time.
 
 ## Quick Start
 

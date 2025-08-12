@@ -3,6 +3,7 @@ package broadcaster
 import (
 	"context"
 	"sync"
+	"time"
 )
 
 type Manager struct {
@@ -20,6 +21,11 @@ type Manager struct {
 	serviceCtx context.Context
 	// serviceCancel is the cancel function for the serviceCtx
 	serviceCancel context.CancelFunc
+
+	initialBackoff     time.Duration
+	maxBackoff         time.Duration
+	clientBufferSize   int
+	channelSendTimeout time.Duration
 }
 
 type Option func(*Manager)
@@ -30,6 +36,30 @@ func WithPubSub(pubsub PubSub) Option {
 	}
 }
 
+func WithInitialBackoff(d time.Duration) Option {
+	return func(m *Manager) {
+		m.initialBackoff = d
+	}
+}
+
+func WithMaxBackoff(d time.Duration) Option {
+	return func(m *Manager) {
+		m.maxBackoff = d
+	}
+}
+
+func WithClientBufferSize(size int) Option {
+	return func(m *Manager) {
+		m.clientBufferSize = size
+	}
+}
+
+func WithChannelSendTimeout(d time.Duration) Option {
+	return func(m *Manager) {
+		m.channelSendTimeout = d
+	}
+}
+
 func NewManager(opts ...Option) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &Manager{
@@ -37,6 +67,10 @@ func NewManager(opts ...Option) *Manager {
 		disconnectChan:     make(chan string),
 		serviceCtx:         ctx,
 		serviceCancel:      cancel,
+		initialBackoff:     time.Second,
+		maxBackoff:         time.Minute,
+		clientBufferSize:   5,
+		channelSendTimeout: time.Millisecond * 100,
 	}
 	for _, opt := range opts {
 		opt(m)
@@ -61,7 +95,15 @@ func (s *Manager) RegisterClient(channel string, clientID int) <-chan []byte {
 	sb, ok := s.activeBroadcasters[channel]
 
 	if !ok {
-		sb = NewBroadcaster(channel, s.pubsub, s.disconnectChan)
+		sb = NewBroadcaster(
+			channel,
+			s.pubsub,
+			s.disconnectChan,
+			s.initialBackoff,
+			s.maxBackoff,
+			s.channelSendTimeout,
+			s.clientBufferSize,
+		)
 
 		s.activeBroadcasters[channel] = sb
 		sb.Start(s.serviceCtx)

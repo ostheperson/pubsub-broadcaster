@@ -22,26 +22,30 @@ type broadcaster struct {
 	stopChan chan struct{}
 	// disconnectChan is used to signal the manager that this broadcaster can be removed
 	disconnectChan chan<- string
-}
 
-const (
-	initialBackoff     = 1 * time.Second
-	maxBackoff         = 1 * time.Minute
-	clientBufferSize   = 5
-	channelSendTimeout = time.Millisecond * 100
-)
+	initialBackoff     time.Duration
+	maxBackoff         time.Duration
+	clientBufferSize   int
+	channelSendTimeout time.Duration
+}
 
 func NewBroadcaster(
 	channel string,
 	pubsub PubSub,
 	disconnectChan chan<- string,
+	initialBackoff, maxBackoff, channelSendTimeout time.Duration,
+	clientBufferSize int,
 ) *broadcaster {
 	return &broadcaster{
-		channel:        channel,
-		pubsub:         pubsub,
-		clientChannels: make(map[int]chan []byte),
-		disconnectChan: disconnectChan,
-		stopChan:       make(chan struct{}),
+		channel:            channel,
+		pubsub:             pubsub,
+		clientChannels:     make(map[int]chan []byte),
+		disconnectChan:     disconnectChan,
+		stopChan:           make(chan struct{}),
+		initialBackoff:     initialBackoff,
+		maxBackoff:         maxBackoff,
+		channelSendTimeout: channelSendTimeout,
+		clientBufferSize:   clientBufferSize,
 	}
 }
 
@@ -51,7 +55,7 @@ func (sb *broadcaster) Start(ctx context.Context) {
 }
 
 func (sb *broadcaster) AddClient(id int) <-chan []byte {
-	client := make(chan []byte, clientBufferSize)
+	client := make(chan []byte, sb.clientBufferSize)
 	sb.clientMu.Lock()
 	sb.clientChannels[id] = client
 	sb.clientMu.Unlock()
@@ -82,14 +86,14 @@ func (sb *broadcaster) Stop() {
 	}
 	select {
 	case sb.disconnectChan <- sb.channel:
-	case <-time.After(channelSendTimeout):
+	case <-time.After(sb.channelSendTimeout):
 	}
 }
 
 func (sb *broadcaster) listen(ctx context.Context) {
 	defer sb.wg.Done()
 
-	backoff := initialBackoff
+	backoff := sb.initialBackoff
 	for {
 		select {
 		case <-sb.stopChan:
@@ -104,8 +108,8 @@ func (sb *broadcaster) listen(ctx context.Context) {
 		if err != nil {
 			time.Sleep(backoff)
 			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
+			if backoff > sb.maxBackoff {
+				backoff = sb.maxBackoff
 			}
 			continue
 		}
@@ -114,8 +118,8 @@ func (sb *broadcaster) listen(ctx context.Context) {
 		if err := sb.processMessages(ctx, subscriber); err != nil {
 			time.Sleep(backoff)
 			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
+			if backoff > sb.maxBackoff {
+				backoff = sb.maxBackoff
 			}
 		} else {
 			return
@@ -135,7 +139,7 @@ func (sb *broadcaster) processMessages(ctx context.Context, subscriber Subscribe
 			for _, clientChan := range sb.clientChannels {
 				select {
 				case clientChan <- msg.Payload:
-				case <-time.After(channelSendTimeout):
+				case <-time.After(sb.channelSendTimeout):
 				}
 			}
 
