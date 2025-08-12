@@ -10,12 +10,10 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Client is a Redis adapter that implements the broadcaster.PubSub interface.
 type Client struct {
 	client *redis.Client
 }
 
-// New creates a new Redis client adapter.
 func New(addr, password string) *Client {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:        addr,
@@ -27,17 +25,10 @@ func New(addr, password string) *Client {
 	return &Client{client: rdb}
 }
 
-// GetClient returns the underlying Redis client.
-func (c *Client) GetClient() *redis.Client {
-	return c.client
-}
-
-// Close closes the Redis connection.
 func (c *Client) Close() error {
 	return c.client.Close()
 }
 
-// Publish publishes a message to a Redis channel.
 func (c *Client) Publish(ctx context.Context, channel string, payload any) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -50,7 +41,6 @@ func (c *Client) Publish(ctx context.Context, channel string, payload any) error
 	return nil
 }
 
-// Subscribe creates a subscription to a Redis channel.
 func (c *Client) Subscribe(ctx context.Context, channel string) (broadcaster.Subscriber, error) {
 	pubsub := c.client.Subscribe(ctx, channel)
 	return &redisSubscriber{
@@ -61,7 +51,6 @@ func (c *Client) Subscribe(ctx context.Context, channel string) (broadcaster.Sub
 	}, nil
 }
 
-// redisSubscriber implements the broadcaster.Subscriber interface for Redis.
 type redisSubscriber struct {
 	pubsub  *redis.PubSub
 	channel string
@@ -69,14 +58,11 @@ type redisSubscriber struct {
 	done    chan struct{}
 }
 
-// Channel returns the message channel.
 func (s *redisSubscriber) Channel() <-chan *broadcaster.Message {
-	// Start the message forwarding goroutine if not already started
 	go s.forwardMessages()
 	return s.msgChan
 }
 
-// Close closes the subscription.
 func (s *redisSubscriber) Close() error {
 	close(s.done)
 	close(s.msgChan)
@@ -94,7 +80,6 @@ func (s *redisSubscriber) forwardMessages() {
 			if !ok {
 				return
 			}
-			// Convert Redis message to our generic format
 			genericMsg := &broadcaster.Message{
 				Channel: msg.Channel,
 				Payload: []byte(msg.Payload),

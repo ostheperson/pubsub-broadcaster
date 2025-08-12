@@ -22,10 +22,8 @@ type Manager struct {
 	serviceCancel context.CancelFunc
 }
 
-// An Option configures the Manager.
 type Option func(*Manager)
 
-// WithPubSub is an option that sets the pub/sub backend.
 func WithPubSub(pubsub PubSub) Option {
 	return func(m *Manager) {
 		m.pubsub = pubsub
@@ -86,12 +84,18 @@ func (s *Manager) RemoveBroadcaster(channel string) {
 	s.broadcasterMu.Unlock()
 }
 
+func (s *Manager) StopBroadcaster(channel string) {
+	s.broadcasterMu.Lock()
+	sb, ok := s.activeBroadcasters[channel]
+	s.broadcasterMu.Unlock()
+	if ok {
+		sb.Stop()
+	}
+}
+
 func (s *Manager) Stop() {
 	s.serviceCancel()
 	s.broadcasterMu.Lock()
-	for channel, sb := range s.activeBroadcasters {
-		sb.Stop()
-		delete(s.activeBroadcasters, channel)
-	}
+	s.activeBroadcasters = make(map[string]*broadcaster)
 	s.broadcasterMu.Unlock()
 }

@@ -25,8 +25,10 @@ type broadcaster struct {
 }
 
 const (
-	initialBackoff = 1 * time.Second
-	maxBackoff     = 1 * time.Minute
+	initialBackoff     = 1 * time.Second
+	maxBackoff         = 1 * time.Minute
+	clientBufferSize   = 5
+	channelSendTimeout = time.Millisecond * 100
 )
 
 func NewBroadcaster(
@@ -49,7 +51,7 @@ func (sb *broadcaster) Start(ctx context.Context) {
 }
 
 func (sb *broadcaster) AddClient(id int) <-chan []byte {
-	client := make(chan []byte, 5)
+	client := make(chan []byte, clientBufferSize)
 	sb.clientMu.Lock()
 	sb.clientChannels[id] = client
 	sb.clientMu.Unlock()
@@ -65,7 +67,7 @@ func (sb *broadcaster) RemoveClient(id int) {
 	}
 
 	if len(sb.clientChannels) == 0 {
-		sb.disconnectChan <- sb.channel
+		sb.Stop()
 	}
 }
 
@@ -78,6 +80,10 @@ func (sb *broadcaster) Stop() {
 	for _, ch := range sb.clientChannels {
 		close(ch)
 	}
+	select {
+	case sb.disconnectChan <- sb.channel:
+	case <-time.After(channelSendTimeout):
+	}
 }
 
 func (sb *broadcaster) listen(ctx context.Context) {
@@ -89,6 +95,7 @@ func (sb *broadcaster) listen(ctx context.Context) {
 		case <-sb.stopChan:
 			return
 		case <-ctx.Done():
+			sb.Stop()
 			return
 		default:
 		}
@@ -104,7 +111,7 @@ func (sb *broadcaster) listen(ctx context.Context) {
 		}
 		defer subscriber.Close()
 
-		if err := sb.processMessage(ctx, subscriber); err != nil {
+		if err := sb.processMessages(ctx, subscriber); err != nil {
 			time.Sleep(backoff)
 			backoff *= 2
 			if backoff > maxBackoff {
@@ -116,7 +123,7 @@ func (sb *broadcaster) listen(ctx context.Context) {
 	}
 }
 
-func (sb *broadcaster) processMessage(ctx context.Context, subscriber Subscriber) error {
+func (sb *broadcaster) processMessages(ctx context.Context, subscriber Subscriber) error {
 	for {
 		select {
 		case msg, ok := <-subscriber.Channel():
@@ -128,7 +135,7 @@ func (sb *broadcaster) processMessage(ctx context.Context, subscriber Subscriber
 			for _, clientChan := range sb.clientChannels {
 				select {
 				case clientChan <- msg.Payload:
-				case <-time.After(100 * time.Millisecond):
+				case <-time.After(channelSendTimeout):
 				}
 			}
 
@@ -136,6 +143,7 @@ func (sb *broadcaster) processMessage(ctx context.Context, subscriber Subscriber
 		case <-sb.stopChan:
 			return nil
 		case <-ctx.Done():
+			sb.Stop()
 			return nil
 		}
 	}

@@ -60,6 +60,7 @@ func TestBroadcaster_HandleRedisDisconnectAndReconnect(t *testing.T) {
 
 	b := NewBroadcaster(channel, mockPbs, make(chan<- string))
 	clientChan := b.AddClient(1)
+
 	b.Start(context.Background())
 
 	time.Sleep(100 * time.Millisecond)
@@ -72,7 +73,6 @@ func TestBroadcaster_HandleRedisDisconnectAndReconnect(t *testing.T) {
 
 		testMessage := &Message{Payload: []byte("message 1")}
 		mockClient.ch <- testMessage
-
 		select {
 		case msg := <-clientChan:
 			if string(msg) != "message 1" {
