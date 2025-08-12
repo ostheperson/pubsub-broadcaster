@@ -69,7 +69,6 @@ func (s *redisSubscriber) Close() error {
 	return s.pubsub.Close()
 }
 
-// forwardMessages forwards Redis messages to our generic message format.
 func (s *redisSubscriber) forwardMessages() {
 	redisChan := s.pubsub.Channel()
 	for {

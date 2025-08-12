@@ -57,11 +57,16 @@ func (m *mockPubSub) Subscribe(ctx context.Context, channel string) (Subscriber,
 func TestBroadcaster_HandleRedisDisconnectAndReconnect(t *testing.T) {
 	mockPbs := &mockPubSub{}
 	channel := "test_channel"
+	disconnect := make(chan string, 1)
 
-	b := NewBroadcaster(channel, mockPbs, make(chan<- string), time.Second, 2*time.Second, 100*time.Millisecond, 10)
+	b := NewBroadcaster(channel, mockPbs, disconnect, time.Second, 2*time.Second, 100*time.Millisecond, 10)
 	clientChan := b.AddClient(1)
 
 	b.Start(context.Background())
+
+	go func() {
+		<-disconnect
+	}()
 
 	time.Sleep(100 * time.Millisecond)
 

@@ -84,10 +84,7 @@ func (sb *broadcaster) Stop() {
 	for _, ch := range sb.clientChannels {
 		close(ch)
 	}
-	select {
-	case sb.disconnectChan <- sb.channel:
-	case <-time.After(sb.channelSendTimeout):
-	}
+	sb.disconnectChan <- sb.channel
 }
 
 func (sb *broadcaster) listen(ctx context.Context) {
