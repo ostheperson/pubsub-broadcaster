@@ -93,10 +93,18 @@ func (sb *broadcaster) listen(ctx context.Context) {
 		default:
 		}
 
-		pubsubClient := sb.pubsub.Subscribe(ctx, sb.channel)
-		defer pubsubClient.Close()
+		subscriber, err := sb.pubsub.Subscribe(ctx, sb.channel)
+		if err != nil {
+			time.Sleep(backoff)
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+			continue
+		}
+		defer subscriber.Close()
 
-		if err := sb.processMessage(ctx, pubsubClient); err != nil {
+		if err := sb.processMessage(ctx, subscriber); err != nil {
 			time.Sleep(backoff)
 			backoff *= 2
 			if backoff > maxBackoff {
@@ -108,18 +116,18 @@ func (sb *broadcaster) listen(ctx context.Context) {
 	}
 }
 
-func (sb *broadcaster) processMessage(ctx context.Context, pubsubClient PubSubClient) error {
+func (sb *broadcaster) processMessage(ctx context.Context, subscriber Subscriber) error {
 	for {
 		select {
-		case msg, ok := <-pubsubClient.Channel():
+		case msg, ok := <-subscriber.Channel():
 			if !ok {
-				return fmt.Errorf("redis pubsub channel closed")
+				return fmt.Errorf("pubsub channel closed")
 			}
 
 			sb.clientMu.RLock()
 			for _, clientChan := range sb.clientChannels {
 				select {
-				case clientChan <- []byte(msg.Payload):
+				case clientChan <- msg.Payload:
 				case <-time.After(100 * time.Millisecond):
 				}
 			}

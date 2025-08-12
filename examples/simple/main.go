@@ -12,20 +12,23 @@ import (
 	"time"
 
 	broadcaster "github.com/ostheperson/pubsub-broadcaster"
+	"github.com/ostheperson/pubsub-broadcaster/adapter/redis"
 )
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	redisClient := broadcaster.NewRedisClient("localhost:6379", "")
-	defer redisClient.Close()
+	redisAdapter := redis.New("localhost:6379", "")
+	defer redisAdapter.Close()
 
-	manager := broadcaster.NewManager(redisClient)
+	manager := broadcaster.NewManager(
+		broadcaster.WithPubSub(redisAdapter),
+	)
 
 	channels := []string{"news", "sports", "weather"}
 	var wg sync.WaitGroup
 
-	// -- 5 clients subscribe to one of the three topics at random --
+	// -- five clients subscribe to one of the three topics at random --
 
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
@@ -53,7 +56,7 @@ func main() {
 			case <-ticker.C:
 				channel := channels[rand.Intn(len(channels))]
 				message := fmt.Sprintf("Update for %s", channel)
-				if err := redisClient.Publish(context.Background(), channel, message); err != nil {
+				if err := redisAdapter.Publish(context.Background(), channel, message); err != nil {
 					logger.Error("Failed to publish message", "error", err)
 				}
 			case <-manager.ServiceContext().Done():

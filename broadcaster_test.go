@@ -5,16 +5,14 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/redis/go-redis/v9"
 )
 
 type mockPubSubClient struct {
-	ch chan *redis.Message
+	ch chan *Message
 	mu sync.Mutex
 }
 
-func (m *mockPubSubClient) Channel(...redis.ChannelOption) <-chan *redis.Message {
+func (m *mockPubSubClient) Channel() <-chan *Message {
 	return m.ch
 }
 
@@ -37,7 +35,7 @@ func (t *mockPubSub) Publish(ctx context.Context, channel string, payload any) e
 	return nil
 }
 
-func (m *mockPubSub) Subscribe(ctx context.Context, channel string) PubSubClient {
+func (m *mockPubSub) Subscribe(ctx context.Context, channel string) (Subscriber, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -50,10 +48,10 @@ func (m *mockPubSub) Subscribe(ctx context.Context, channel string) PubSubClient
 	}
 
 	client := &mockPubSubClient{
-		ch: make(chan *redis.Message, 10),
+		ch: make(chan *Message, 10),
 	}
 	m.clients[channel] = client
-	return client
+	return client, nil
 }
 
 func TestBroadcaster_HandleRedisDisconnectAndReconnect(t *testing.T) {
@@ -72,7 +70,7 @@ func TestBroadcaster_HandleRedisDisconnectAndReconnect(t *testing.T) {
 			t.Fatalf("Expected mock client for channel %s to exist", channel)
 		}
 
-		testMessage := &redis.Message{Payload: "message 1"}
+		testMessage := &Message{Payload: []byte("message 1")}
 		mockClient.ch <- testMessage
 
 		select {
@@ -104,7 +102,7 @@ func TestBroadcaster_HandleRedisDisconnectAndReconnect(t *testing.T) {
 			t.Fatal("Expected a new mock client after reconnection attempt")
 		}
 
-		testMessage := &redis.Message{Payload: "message 3"}
+		testMessage := &Message{Payload: []byte("message 3")}
 		mockClient.ch <- testMessage
 
 		select {

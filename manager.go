@@ -22,14 +22,26 @@ type Manager struct {
 	serviceCancel context.CancelFunc
 }
 
-func NewManager(pubsub PubSub) *Manager {
+// An Option configures the Manager.
+type Option func(*Manager)
+
+// WithPubSub is an option that sets the pub/sub backend.
+func WithPubSub(pubsub PubSub) Option {
+	return func(m *Manager) {
+		m.pubsub = pubsub
+	}
+}
+
+func NewManager(opts ...Option) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &Manager{
-		pubsub:             pubsub,
 		activeBroadcasters: make(map[string]*broadcaster),
 		disconnectChan:     make(chan string),
 		serviceCtx:         ctx,
 		serviceCancel:      cancel,
+	}
+	for _, opt := range opts {
+		opt(m)
 	}
 	go m.listenForDisconnects()
 	return m
