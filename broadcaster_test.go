@@ -60,7 +60,7 @@ func TestBroadcaster_HandleRedisDisconnectAndReconnect(t *testing.T) {
 	disconnect := make(chan string, 1)
 
 	b := NewBroadcaster(channel, mockPbs, disconnect, time.Second, 2*time.Second, 100*time.Millisecond, 10)
-	clientChan := b.AddClient(1)
+	clientChan := b.AddClient("player1")
 
 	b.Start(context.Background())
 

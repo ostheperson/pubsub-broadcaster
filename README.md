@@ -1,11 +1,11 @@
 # Pub/Sub Broadcaster
 
-A simple Go library for fanning out Pub/Sub messages to many clients. Following the principle of letting worker crash in a controlled way.
+A simple Go library for fanning out Pub/Sub messages to many clients. 
 
 
 ## What It Does
 
-*   **Manager:** Makes and manages broadcasters.
+*   **Manager:** Creates and manages broadcasters.
 *   **Broadcaster:** Grabs messages from a pub/sub topic and sends them to all clients.
 
 ## How It Works
@@ -17,7 +17,7 @@ A simple Go library for fanning out Pub/Sub messages to many clients. Following 
 
 ## Supported Pub/Sub Systems
 
-*   [x] any system that can implement pubsub interface
+*   [x] any system that can implement the pubsub interface
 
 ## Resilience and Error Handling
 

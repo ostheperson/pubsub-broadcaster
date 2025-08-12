@@ -15,7 +15,7 @@ type broadcaster struct {
 	pubsub PubSub
 
 	// clientChannels maps client IDs to their respective data channels
-	clientChannels map[int]chan []byte
+	clientChannels map[string]chan []byte
 	clientMu       sync.RWMutex
 
 	// stopChan is used to signal the broadcaster's internal goroutine to stop
@@ -39,7 +39,7 @@ func NewBroadcaster(
 	return &broadcaster{
 		channel:            channel,
 		pubsub:             pubsub,
-		clientChannels:     make(map[int]chan []byte),
+		clientChannels:     make(map[string]chan []byte),
 		disconnectChan:     disconnectChan,
 		stopChan:           make(chan struct{}),
 		initialBackoff:     initialBackoff,
@@ -54,7 +54,7 @@ func (sb *broadcaster) Start(ctx context.Context) {
 	go sb.listen(ctx)
 }
 
-func (sb *broadcaster) AddClient(id int) <-chan []byte {
+func (sb *broadcaster) AddClient(id string) <-chan []byte {
 	client := make(chan []byte, sb.clientBufferSize)
 	sb.clientMu.Lock()
 	sb.clientChannels[id] = client
@@ -62,13 +62,13 @@ func (sb *broadcaster) AddClient(id int) <-chan []byte {
 	return client
 }
 
-func (sb *broadcaster) RemoveClient(id int) {
+func (sb *broadcaster) RemoveClient(id string) {
 	sb.clientMu.Lock()
-	defer sb.clientMu.Unlock()
 	if client, ok := sb.clientChannels[id]; ok {
 		close(client)
 		delete(sb.clientChannels, id)
 	}
+	sb.clientMu.Unlock()
 
 	if len(sb.clientChannels) == 0 {
 		sb.Stop()
@@ -78,12 +78,11 @@ func (sb *broadcaster) RemoveClient(id int) {
 func (sb *broadcaster) Stop() {
 	close(sb.stopChan)
 	sb.wg.Wait()
-
 	sb.clientMu.Lock()
-	defer sb.clientMu.Unlock()
 	for _, ch := range sb.clientChannels {
 		close(ch)
 	}
+	sb.clientMu.Unlock()
 	sb.disconnectChan <- sb.channel
 }
 

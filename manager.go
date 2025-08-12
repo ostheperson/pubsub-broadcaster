@@ -75,6 +75,10 @@ func NewManager(opts ...Option) *Manager {
 	for _, opt := range opts {
 		opt(m)
 	}
+	if m.pubsub == nil {
+		panic("pubsub is required")
+	}
+
 	go m.listenForDisconnects()
 	return m
 }
@@ -89,7 +93,7 @@ func (s *Manager) ServiceContext() context.Context {
 	return s.serviceCtx
 }
 
-func (s *Manager) RegisterClient(channel string, clientID int) <-chan []byte {
+func (s *Manager) RegisterClient(channel string, clientID string) <-chan []byte {
 	s.broadcasterMu.Lock()
 	defer s.broadcasterMu.Unlock()
 	sb, ok := s.activeBroadcasters[channel]
@@ -111,7 +115,7 @@ func (s *Manager) RegisterClient(channel string, clientID int) <-chan []byte {
 	return sb.AddClient(clientID)
 }
 
-func (s *Manager) UnregisterClient(channel string, clientID int) {
+func (s *Manager) UnregisterClient(channel string, clientID string) {
 	s.broadcasterMu.RLock()
 	sb, ok := s.activeBroadcasters[channel]
 	s.broadcasterMu.RUnlock()

@@ -59,14 +59,13 @@ func TestManager(t *testing.T) {
 		defer manager.Stop()
 
 		channel := "test-channel"
-		client1ID := 1
-		client2ID := 2
+		client1ID := "1"
+		client2ID := "2"
 		t.Run("registration on same channel creates one broadcaster", func(t *testing.T) {
 			manager.RegisterClient(channel, client1ID)
 			if len(manager.activeBroadcasters) != 1 {
 				t.Fatalf("expected 1 active broadcaster, got %d", len(manager.activeBroadcasters))
 			}
-
 			manager.RegisterClient(channel, client2ID)
 			if len(manager.activeBroadcasters) != 1 {
 				t.Fatalf("expected 1 active broadcaster after second client, got %d", len(manager.activeBroadcasters))
@@ -91,8 +90,8 @@ func TestManager(t *testing.T) {
 		pubsub := newMockPubSub()
 		manager := NewManager(WithPubSub(pubsub))
 
-		manager.RegisterClient("channel1", 1)
-		manager.RegisterClient("channel2", 1)
+		manager.RegisterClient("channel1", "1")
+		manager.RegisterClient("channel2", "1")
 		if len(manager.activeBroadcasters) != 2 {
 			t.Fatalf("expected 2 active broadcasters, got %d", len(manager.activeBroadcasters))
 		}
@@ -107,7 +106,7 @@ func TestManager(t *testing.T) {
 		pubsub := newMockPubSub()
 		manager := NewManager(WithPubSub(pubsub))
 
-		manager.RegisterClient("channel1", 1)
+		manager.RegisterClient("channel1", "1")
 		if len(manager.activeBroadcasters) != 1 {
 			t.Fatalf("expected 1 active broadcasters, got %d", len(manager.activeBroadcasters))
 		}
@@ -131,8 +130,8 @@ func TestManager(t *testing.T) {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()
-				channel := "channel-" + fmt.Sprint(id%numChannels)
-				clientID := id
+				channel := "channel-" + fmt.Sprint(i%numChannels)
+				clientID := fmt.Sprint(id)
 				manager.RegisterClient(channel, clientID)
 				time.Sleep(1 * time.Millisecond)
 				manager.UnregisterClient(channel, clientID)
