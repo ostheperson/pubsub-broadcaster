@@ -8,8 +8,8 @@ import (
 )
 
 type broadcaster struct {
+	// topic is the topic name for the broadcaster
 	topic string
-	wg    sync.WaitGroup
 
 	// subscriber is the pub/sub client used for communication
 	subscriber Subscriber
@@ -23,10 +23,16 @@ type broadcaster struct {
 	// disconnectChan is used to signal the manager that this broadcaster can be removed
 	disconnectChan chan<- string
 
-	initialBackoff     time.Duration
-	maxBackoff         time.Duration
-	clientBufferSize   int
+	// initialBackoff is the initial backoff duration for reconnecting to the pub/sub server
+	initialBackoff time.Duration
+	// maxBackoff is the maximum backoff duration for reconnecting to the pub/sub server
+	maxBackoff time.Duration
+	// clientBufferSize is the size of the client's message buffer
+	clientBufferSize int
+	// channelSendTimeout is the timeout for sending a message to a client
 	channelSendTimeout time.Duration
+
+	wg sync.WaitGroup
 }
 
 func NewBroadcaster(
@@ -134,7 +140,6 @@ func (sb *broadcaster) processMessages(ctx context.Context, ch <-chan *Message) 
 			for _, clientChan := range sb.clientChannels {
 				select {
 				case clientChan <- msg.Payload:
-
 				case <-time.After(sb.channelSendTimeout):
 				}
 			}

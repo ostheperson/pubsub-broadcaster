@@ -22,9 +22,13 @@ type Manager struct {
 	// serviceCancel is the cancel function for the serviceCtx
 	serviceCancel context.CancelFunc
 
-	initialBackoff     time.Duration
-	maxBackoff         time.Duration
-	clientBufferSize   int
+	// initialBackoff is the initial backoff duration for reconnecting to the pub/sub server
+	initialBackoff time.Duration
+	// maxBackoff is the maximum backoff duration for reconnecting to the pub/sub server
+	maxBackoff time.Duration
+	// clientBufferSize is the size of the client's message buffer
+	clientBufferSize int
+	// channelSendTimeout is the timeout for sending a message to a client
 	channelSendTimeout time.Duration
 }
 
