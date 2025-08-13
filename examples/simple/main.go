@@ -12,13 +12,20 @@ import (
 	"time"
 
 	broadcaster "github.com/ostheperson/pubsub-broadcaster"
-	inmemmoryadapter "github.com/ostheperson/pubsub-broadcaster/adapter/inmemory"
+	redisadapter "github.com/ostheperson/pubsub-broadcaster/adapter/redis"
+	"github.com/redis/go-redis/v9"
+	// inmemmoryadapter "github.com/ostheperson/pubsub-broadcaster/adapter/inmemory"
 )
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	// adapter := redis.New("localhost:6379", "")
-	adapter := inmemmoryadapter.New()
+	adapter := redisadapter.New(redis.NewClient(&redis.Options{
+		Addr:        "",
+		PoolTimeout: 5 * time.Second,
+		Password:    "",
+		DB:          0,
+		PoolSize:    10,
+	}))
 
 	manager := broadcaster.NewManager(
 		broadcaster.WithSubscriber(adapter),

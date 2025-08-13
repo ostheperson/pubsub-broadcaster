@@ -60,6 +60,8 @@ func WithChannelSendTimeout(d time.Duration) Option {
 	}
 }
 
+var newBroadcaster = NewBroadcaster
+
 func NewManager(opts ...Option) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
 	m := &Manager{
@@ -99,7 +101,7 @@ func (s *Manager) RegisterClient(topic string, clientID string) <-chan []byte {
 	sb, ok := s.activeBroadcasters[topic]
 
 	if !ok {
-		sb = NewBroadcaster(
+		sb = newBroadcaster(
 			topic,
 			s.subscriber,
 			s.disconnectChan,

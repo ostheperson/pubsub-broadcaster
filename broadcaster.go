@@ -127,13 +127,14 @@ func (sb *broadcaster) processMessages(ctx context.Context, ch <-chan *Message) 
 		select {
 		case msg, ok := <-ch:
 			if !ok {
-				return fmt.Errorf("pubsub topic closed")
+				return fmt.Errorf("subscribtion for topic %q has been closed", sb.topic)
 			}
 
 			sb.clientMu.RLock()
 			for _, clientChan := range sb.clientChannels {
 				select {
 				case clientChan <- msg.Payload:
+
 				case <-time.After(sb.channelSendTimeout):
 				}
 			}
