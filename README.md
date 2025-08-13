@@ -39,18 +39,22 @@ manager := broadcaster.NewManager(
     broadcaster.WithSubscriber(redisAdapter),
 )
 
-// 2. Add a client to a topic
+// 2. Start the manager
+manager.Start()
+defer manager.Stop()
+
+// 3. Add a client to a topic
 clientChan := manager.RegisterClient("my-topic", 1)
 defer manager.UnregisterClient("my-topic", 1)
 
-// 3. Listen for messages
+// 4. Listen for messages
 go func() {
     for msg := range clientChan {
         fmt.Println("Got message:", string(msg))
     }
 }()
 
-// 4. Publish something to the topic
+// 5. Publish something to the topic
 redisAdapter.Publish(context.Background(), "my-topic", "hello underworld")
 ```
 

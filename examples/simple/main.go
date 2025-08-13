@@ -34,6 +34,8 @@ func main() {
 		broadcaster.WithClientBufferSize(10),
 		broadcaster.WithChannelSendTimeout(200*time.Millisecond),
 	)
+	manager.Start()
+	defer manager.Stop()
 
 	channels := []string{"news", "sports", "weather"}
 	var wg sync.WaitGroup
@@ -80,6 +82,5 @@ func main() {
 	<-sigChan
 
 	fmt.Println("Shutting down...")
-	manager.Stop()
 	wg.Wait()
 }

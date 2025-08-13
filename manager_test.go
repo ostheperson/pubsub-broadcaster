@@ -47,6 +47,7 @@ func TestManager(t *testing.T) {
 	pubsub := newMockPubSub()
 	t.Run("registration and unregistration", func(t *testing.T) {
 		manager := NewManager(WithSubscriber(pubsub))
+		manager.Start()
 		defer manager.Stop()
 
 		channel := "test-channel"
@@ -90,6 +91,7 @@ func TestManager(t *testing.T) {
 			WithClientBufferSize(clientBufferSize),
 			WithChannelSendTimeout(channelSendTimeout),
 		)
+		manager.Start()
 		defer manager.Stop()
 
 		originalNewBroadcaster := newBroadcaster
@@ -126,6 +128,7 @@ func TestManager(t *testing.T) {
 
 	t.Run("listen for disconnects", func(t *testing.T) {
 		manager := NewManager(WithSubscriber(pubsub))
+		manager.Start()
 		defer manager.Stop()
 
 		manager.RegisterClient("test-channel", "1")
@@ -143,6 +146,8 @@ func TestManager(t *testing.T) {
 
 	t.Run("stop single broadcaster", func(t *testing.T) {
 		manager := NewManager(WithSubscriber(pubsub))
+		manager.Start()
+		defer manager.Stop()
 
 		manager.RegisterClient("channel1", "1")
 		if len(manager.activeBroadcasters) != 1 {
@@ -157,7 +162,8 @@ func TestManager(t *testing.T) {
 
 	t.Run("closes all broadcasters after manager stops", func(t *testing.T) {
 		manager := NewManager(WithSubscriber(pubsub))
-
+		manager.Start()
+		defer manager.Stop()
 		manager.RegisterClient("channel1", "1")
 		manager.RegisterClient("channel2", "1")
 		if len(manager.activeBroadcasters) != 2 {
@@ -171,6 +177,7 @@ func TestManager(t *testing.T) {
 	})
 	t.Run("concurrent registeration and unregistration", func(t *testing.T) {
 		manager := NewManager(WithSubscriber(pubsub))
+		manager.Start()
 		defer manager.Stop()
 
 		var wg sync.WaitGroup
@@ -190,7 +197,7 @@ func TestManager(t *testing.T) {
 		}
 
 		wg.Wait()
-		time.Sleep(10 * time.Millisecond) // allow time for disconnects
+		time.Sleep(10 * time.Millisecond)
 		if len(manager.activeBroadcasters) != 0 {
 			t.Fatalf("expected 0 active broadcasters after concurrent access, got %d", len(manager.activeBroadcasters))
 		}

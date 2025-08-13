@@ -81,8 +81,11 @@ func NewManager(opts ...Option) *Manager {
 		panic("subscriber is required")
 	}
 
-	go m.listenForDisconnects()
 	return m
+}
+
+func (m *Manager) Start() {
+	go m.listenForDisconnects()
 }
 
 func (s *Manager) listenForDisconnects() {
