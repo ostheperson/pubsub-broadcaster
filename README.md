@@ -1,20 +1,8 @@
-# Pub/Sub Broadcaster
+# pubsub Broadcaster
 
-A simple Go library for fanning out Pub/Sub messages to many clients. 
+A simple Go library for fanning out pubsub messages to many clients. **Manager** creates and manages broadcasters. **Broadcaster** grabs messages from a subscriber and sends them to all clients.
 
-## What It Does
-
-*   **Manager:** Creates and manages broadcasters.
-*   **Broadcaster:** Grabs messages from a subscriber and sends them to all clients.
-
-## How It Works
-
-1.  Client connects.
-2.  You ask the `Manager` for a channel for a topic (e.g., `topic-1`).
-3.  `Manager` finds or makes a `broadcaster` for that topic.
-4.  `Broadcaster` sends messages from the pub/sub system to all clients on that topic.
-
-## Supported Pub/Sub Systems
+## Supported pubsub Systems
 
 *   [x] any system that can implement the subscriber interface
 
@@ -22,11 +10,9 @@ A simple Go library for fanning out Pub/Sub messages to many clients.
 
 The system is designed to be robust and handle common failures gracefully.
 
-*   **Pub/Sub Disconnection:** If the connection to the pub/sub system is lost, it automatically attempts to reconnect using an exponential backoff to avoid overwhelming the server. Once the pub/sub system is available again, the connection is re-established, and message flow resumes.
+*   **pubsub Disconnection:** If the connection to the pubsub system is lost, it attempts to reconnect using an exponential backoff. Once the pubsub system is available again, the connection is re-established, and message flow resumes.
 
-*   **Client Disconnection:** When a client disconnects, the manager is notified and removes the client from the appropriate broadcaster.
-
-*   **Resource Management:** If a broadcaster loses its last client, it automatically shuts down its pub/sub subscription and signals the manager to be removed.
+*   **Resource Management:** If a broadcaster loses its last client, its pubsub subscription is shutsdown and signals the manager to be removed.
 
 *   **Graceful Shutdown:** The entire system can be shut down cleanly, ensuring all connections are closed and goroutines are terminated without leaks.
 
