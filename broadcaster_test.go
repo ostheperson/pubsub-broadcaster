@@ -7,60 +7,52 @@ import (
 	"time"
 )
 
-type mockPubSubClient struct {
-	ch chan *Message
-	mu sync.Mutex
-}
-
-func (m *mockPubSubClient) Channel() <-chan *Message {
-	return m.ch
-}
-
-func (m *mockPubSubClient) Close() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.ch != nil {
-		close(m.ch)
-		m.ch = nil
-	}
-	return nil
-}
-
-type mockPubSub struct {
+type mockSubscriber struct {
 	mu      sync.Mutex
-	clients map[string]*mockPubSubClient
+	ch      chan *Message
+	closed  bool
+	clients map[string]chan *Message
 }
 
-func (t *mockPubSub) Publish(ctx context.Context, channel string, payload any) error {
+func newMockSubscriber() *mockSubscriber {
+	return &mockSubscriber{
+		clients: make(map[string]chan *Message),
+	}
+}
+
+func (m *mockSubscriber) Subscribe(ctx context.Context, channel string) (<-chan *Message, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ch := make(chan *Message, 10)
+	m.clients[channel] = ch
+	return ch, nil
+}
+
+func (m *mockSubscriber) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.closed {
+		close(m.ch)
+		m.closed = true
+	}
 	return nil
 }
 
-func (m *mockPubSub) Subscribe(ctx context.Context, channel string) (Subscriber, error) {
+func (m *mockSubscriber) Publish(ctx context.Context, channel string, msg *Message) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	if m.clients == nil {
-		m.clients = make(map[string]*mockPubSubClient)
+	if ch, ok := m.clients[channel]; ok {
+		ch <- msg
 	}
-
-	if m.clients[channel] != nil {
-		m.clients[channel].Close()
-	}
-
-	client := &mockPubSubClient{
-		ch: make(chan *Message, 10),
-	}
-	m.clients[channel] = client
-	return client, nil
 }
 
 func TestBroadcaster_HandleRedisDisconnectAndReconnect(t *testing.T) {
-	mockPbs := &mockPubSub{}
+	mockPbs := newMockSubscriber()
 	channel := "test_channel"
 	disconnect := make(chan string, 1)
 
 	b := NewBroadcaster(channel, mockPbs, disconnect, time.Second, 2*time.Second, 100*time.Millisecond, 10)
-	clientChan := b.AddClient("player1")
+	clientChan := b.Add("player1")
 
 	b.Start(context.Background())
 
@@ -71,13 +63,8 @@ func TestBroadcaster_HandleRedisDisconnectAndReconnect(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	t.Run("Initial messages are received", func(t *testing.T) {
-		mockClient, ok := mockPbs.clients[channel]
-		if !ok {
-			t.Fatalf("Expected mock client for channel %s to exist", channel)
-		}
-
 		testMessage := &Message{Payload: []byte("message 1")}
-		mockClient.ch <- testMessage
+		mockPbs.Publish(context.Background(), channel, testMessage)
 		select {
 		case msg := <-clientChan:
 			if string(msg) != "message 1" {
@@ -89,8 +76,7 @@ func TestBroadcaster_HandleRedisDisconnectAndReconnect(t *testing.T) {
 	})
 
 	t.Run("Disconnection is handled", func(t *testing.T) {
-
-		mockPbs.clients[channel].Close()
+		mockPbs.Close()
 		time.Sleep(200 * time.Millisecond)
 		select {
 		case <-clientChan:
@@ -102,13 +88,8 @@ func TestBroadcaster_HandleRedisDisconnectAndReconnect(t *testing.T) {
 	t.Run("Reconnection succeeds and new messages are received", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
 
-		mockClient, ok := mockPbs.clients[channel]
-		if !ok {
-			t.Fatal("Expected a new mock client after reconnection attempt")
-		}
-
 		testMessage := &Message{Payload: []byte("message 3")}
-		mockClient.ch <- testMessage
+		mockPbs.Publish(context.Background(), channel, testMessage)
 
 		select {
 		case msg := <-clientChan:

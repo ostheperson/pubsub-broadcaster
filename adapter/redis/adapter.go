@@ -29,65 +29,30 @@ func (c *Client) Close() error {
 	return c.client.Close()
 }
 
-func (c *Client) Publish(ctx context.Context, channel string, payload any) error {
+func (c *Client) Publish(ctx context.Context, topic string, payload any) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	if err = c.client.Publish(ctx, channel, data).Err(); err != nil {
+	if err = c.client.Publish(ctx, topic, data).Err(); err != nil {
 		return fmt.Errorf("failed to publish to Redis: %w", err)
 	}
 	return nil
 }
 
-func (c *Client) Subscribe(ctx context.Context, channel string) (broadcaster.Subscriber, error) {
-	pubsub := c.client.Subscribe(ctx, channel)
-	return &redisSubscriber{
-		pubsub:  pubsub,
-		channel: channel,
-		msgChan: make(chan *broadcaster.Message, 10),
-		done:    make(chan struct{}),
-	}, nil
-}
-
-type redisSubscriber struct {
-	pubsub  *redis.PubSub
-	channel string
-	msgChan chan *broadcaster.Message
-	done    chan struct{}
-}
-
-func (s *redisSubscriber) Channel() <-chan *broadcaster.Message {
-	go s.forwardMessages()
-	return s.msgChan
-}
-
-func (s *redisSubscriber) Close() error {
-	close(s.done)
-	close(s.msgChan)
-	return s.pubsub.Close()
-}
-
-func (s *redisSubscriber) forwardMessages() {
-	redisChan := s.pubsub.Channel()
-	for {
-		select {
-		case <-s.done:
-			return
-		case msg, ok := <-redisChan:
-			if !ok {
-				return
-			}
-			genericMsg := &broadcaster.Message{
-				Channel: msg.Channel,
+func (c *Client) Subscribe(ctx context.Context, topic string) (<-chan *broadcaster.Message, error) {
+	pubsub := c.client.Subscribe(ctx, topic)
+	ch := make(chan *broadcaster.Message, 10)
+	go func() {
+		defer close(ch)
+		redisCh := pubsub.Channel()
+		for msg := range redisCh {
+			ch <- &broadcaster.Message{
+				Topic:   msg.Channel,
 				Payload: []byte(msg.Payload),
 			}
-			select {
-			case s.msgChan <- genericMsg:
-			case <-s.done:
-				return
-			}
 		}
-	}
+	}()
+	return ch, nil
 }

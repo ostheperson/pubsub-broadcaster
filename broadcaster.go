@@ -8,11 +8,11 @@ import (
 )
 
 type broadcaster struct {
-	channel string
-	wg      sync.WaitGroup
+	topic string
+	wg    sync.WaitGroup
 
-	// pubsub is the pub/sub client used for communication
-	pubsub PubSub
+	// subscriber is the pub/sub client used for communication
+	subscriber Subscriber
 
 	// clientChannels maps client IDs to their respective data channels
 	clientChannels map[string]chan []byte
@@ -30,15 +30,15 @@ type broadcaster struct {
 }
 
 func NewBroadcaster(
-	channel string,
-	pubsub PubSub,
+	topic string,
+	subscriber Subscriber,
 	disconnectChan chan<- string,
 	initialBackoff, maxBackoff, channelSendTimeout time.Duration,
 	clientBufferSize int,
 ) *broadcaster {
 	return &broadcaster{
-		channel:            channel,
-		pubsub:             pubsub,
+		topic:              topic,
+		subscriber:         subscriber,
 		clientChannels:     make(map[string]chan []byte),
 		disconnectChan:     disconnectChan,
 		stopChan:           make(chan struct{}),
@@ -54,7 +54,7 @@ func (sb *broadcaster) Start(ctx context.Context) {
 	go sb.listen(ctx)
 }
 
-func (sb *broadcaster) AddClient(id string) <-chan []byte {
+func (sb *broadcaster) Add(id string) <-chan []byte {
 	client := make(chan []byte, sb.clientBufferSize)
 	sb.clientMu.Lock()
 	sb.clientChannels[id] = client
@@ -62,7 +62,7 @@ func (sb *broadcaster) AddClient(id string) <-chan []byte {
 	return client
 }
 
-func (sb *broadcaster) RemoveClient(id string) {
+func (sb *broadcaster) Remove(id string) {
 	sb.clientMu.Lock()
 	if client, ok := sb.clientChannels[id]; ok {
 		close(client)
@@ -83,7 +83,7 @@ func (sb *broadcaster) Stop() {
 		close(ch)
 	}
 	sb.clientMu.Unlock()
-	sb.disconnectChan <- sb.channel
+	sb.disconnectChan <- sb.topic
 }
 
 func (sb *broadcaster) listen(ctx context.Context) {
@@ -100,7 +100,7 @@ func (sb *broadcaster) listen(ctx context.Context) {
 		default:
 		}
 
-		subscriber, err := sb.pubsub.Subscribe(ctx, sb.channel)
+		ch, err := sb.subscriber.Subscribe(ctx, sb.topic)
 		if err != nil {
 			time.Sleep(backoff)
 			backoff *= 2
@@ -109,9 +109,8 @@ func (sb *broadcaster) listen(ctx context.Context) {
 			}
 			continue
 		}
-		defer subscriber.Close()
 
-		if err := sb.processMessages(ctx, subscriber); err != nil {
+		if err := sb.processMessages(ctx, ch); err != nil {
 			time.Sleep(backoff)
 			backoff *= 2
 			if backoff > sb.maxBackoff {
@@ -123,12 +122,12 @@ func (sb *broadcaster) listen(ctx context.Context) {
 	}
 }
 
-func (sb *broadcaster) processMessages(ctx context.Context, subscriber Subscriber) error {
+func (sb *broadcaster) processMessages(ctx context.Context, ch <-chan *Message) error {
 	for {
 		select {
-		case msg, ok := <-subscriber.Channel():
+		case msg, ok := <-ch:
 			if !ok {
-				return fmt.Errorf("pubsub channel closed")
+				return fmt.Errorf("pubsub topic closed")
 			}
 
 			sb.clientMu.RLock()

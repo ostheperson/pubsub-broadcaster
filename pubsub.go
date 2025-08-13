@@ -5,16 +5,16 @@ import (
 )
 
 type Message struct {
-	Channel string
+	Topic   string
 	Payload []byte
 }
 
 type Subscriber interface {
-	Channel() <-chan *Message
+	Subscribe(ctx context.Context, channel string) (<-chan *Message, error)
 	Close() error
 }
 
-type PubSub interface {
+type Publisher interface {
 	Publish(ctx context.Context, channel string, payload any) error
-	Subscribe(ctx context.Context, channel string) (Subscriber, error)
+	Close() error
 }

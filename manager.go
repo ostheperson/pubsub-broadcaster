@@ -7,10 +7,10 @@ import (
 )
 
 type Manager struct {
-	// pubsub is the pub/sub client used for communication
-	pubsub PubSub
+	// subscriber is the pub/sub client used for communication
+	subscriber Subscriber
 
-	// activeBroadcasters maps channel names to their respective broadcaster instances
+	// activeBroadcasters maps topic names to their respective broadcaster instances
 	activeBroadcasters map[string]*broadcaster
 	// broadcasterMu protects access to the activeBroadcasters map
 	broadcasterMu sync.RWMutex
@@ -30,9 +30,9 @@ type Manager struct {
 
 type Option func(*Manager)
 
-func WithPubSub(pubsub PubSub) Option {
+func WithSubscriber(subscriber Subscriber) Option {
 	return func(m *Manager) {
-		m.pubsub = pubsub
+		m.subscriber = subscriber
 	}
 }
 
@@ -75,8 +75,8 @@ func NewManager(opts ...Option) *Manager {
 	for _, opt := range opts {
 		opt(m)
 	}
-	if m.pubsub == nil {
-		panic("pubsub is required")
+	if m.subscriber == nil {
+		panic("subscriber is required")
 	}
 
 	go m.listenForDisconnects()
@@ -84,8 +84,8 @@ func NewManager(opts ...Option) *Manager {
 }
 
 func (s *Manager) listenForDisconnects() {
-	for channel := range s.disconnectChan {
-		s.RemoveBroadcaster(channel)
+	for topic := range s.disconnectChan {
+		s.RemoveBroadcaster(topic)
 	}
 }
 
@@ -93,15 +93,15 @@ func (s *Manager) ServiceContext() context.Context {
 	return s.serviceCtx
 }
 
-func (s *Manager) RegisterClient(channel string, clientID string) <-chan []byte {
+func (s *Manager) RegisterClient(topic string, clientID string) <-chan []byte {
 	s.broadcasterMu.Lock()
 	defer s.broadcasterMu.Unlock()
-	sb, ok := s.activeBroadcasters[channel]
+	sb, ok := s.activeBroadcasters[topic]
 
 	if !ok {
 		sb = NewBroadcaster(
-			channel,
-			s.pubsub,
+			topic,
+			s.subscriber,
 			s.disconnectChan,
 			s.initialBackoff,
 			s.maxBackoff,
@@ -109,30 +109,30 @@ func (s *Manager) RegisterClient(channel string, clientID string) <-chan []byte 
 			s.clientBufferSize,
 		)
 
-		s.activeBroadcasters[channel] = sb
+		s.activeBroadcasters[topic] = sb
 		sb.Start(s.serviceCtx)
 	}
-	return sb.AddClient(clientID)
+	return sb.Add(clientID)
 }
 
-func (s *Manager) UnregisterClient(channel string, clientID string) {
+func (s *Manager) UnregisterClient(topic string, clientID string) {
 	s.broadcasterMu.RLock()
-	sb, ok := s.activeBroadcasters[channel]
+	sb, ok := s.activeBroadcasters[topic]
 	s.broadcasterMu.RUnlock()
 	if ok {
-		sb.RemoveClient(clientID)
+		sb.Remove(clientID)
 	}
 }
 
-func (s *Manager) RemoveBroadcaster(channel string) {
+func (s *Manager) RemoveBroadcaster(topic string) {
 	s.broadcasterMu.Lock()
-	delete(s.activeBroadcasters, channel)
+	delete(s.activeBroadcasters, topic)
 	s.broadcasterMu.Unlock()
 }
 
-func (s *Manager) StopBroadcaster(channel string) {
+func (s *Manager) StopBroadcaster(topic string) {
 	s.broadcasterMu.Lock()
-	sb, ok := s.activeBroadcasters[channel]
+	sb, ok := s.activeBroadcasters[topic]
 	s.broadcasterMu.Unlock()
 	if ok {
 		sb.Stop()

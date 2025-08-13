@@ -2,11 +2,10 @@
 
 A simple Go library for fanning out Pub/Sub messages to many clients. 
 
-
 ## What It Does
 
 *   **Manager:** Creates and manages broadcasters.
-*   **Broadcaster:** Grabs messages from a pub/sub topic and sends them to all clients.
+*   **Broadcaster:** Grabs messages from a subscriber and sends them to all clients.
 
 ## How It Works
 
@@ -17,7 +16,7 @@ A simple Go library for fanning out Pub/Sub messages to many clients.
 
 ## Supported Pub/Sub Systems
 
-*   [x] any system that can implement the pubsub interface
+*   [x] any system that can implement the subscriber interface
 
 ## Resilience and Error Handling
 
@@ -37,7 +36,7 @@ The system is designed to be robust and handle common failures gracefully.
 // 1. Make a manager
 redisAdapter := redis.New("localhost:6379", "")
 manager := broadcaster.NewManager(
-    broadcaster.WithPubSub(redisAdapter),
+    broadcaster.WithSubscriber(redisAdapter),
 )
 
 // 2. Add a client to a topic

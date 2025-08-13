@@ -8,54 +8,45 @@ import (
 	"time"
 )
 
-type mockSubscriber struct {
-	ch chan *Message
-}
-
-func (m *mockSubscriber) Close() error {
-	close(m.ch)
-	return nil
-}
-
-func (m *mockSubscriber) Channel() <-chan *Message {
-	return m.ch
-}
-
 type mockPubsub struct {
 	mu          sync.Mutex
 	messages    map[string][]*Message
-	subscribers map[string][]*mockSubscriber
+	subscribers map[string]chan *Message
 }
 
 func newMockPubSub() *mockPubsub {
 	return &mockPubsub{
 		messages:    make(map[string][]*Message),
-		subscribers: make(map[string][]*mockSubscriber),
+		subscribers: make(map[string]chan *Message),
 	}
 }
 
 func (m *mockPubsub) Publish(ctx context.Context, channel string, message any) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.messages[channel] = append(m.messages[channel], &Message{Payload: []byte(fmt.Sprint(message)), Channel: channel})
-	for _, sub := range m.subscribers[channel] {
-		sub.ch <- &Message{Payload: []byte(message.(string)), Channel: channel}
+	m.messages[channel] = append(m.messages[channel], &Message{Payload: []byte(fmt.Sprint(message)), Topic: channel})
+	if ch, ok := m.subscribers[channel]; ok {
+		ch <- &Message{Payload: []byte(message.(string)), Topic: channel}
 	}
 	return nil
 }
 
-func (m *mockPubsub) Subscribe(ctx context.Context, channel string) (Subscriber, error) {
+func (m *mockPubsub) Subscribe(ctx context.Context, channel string) (<-chan *Message, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	sub := &mockSubscriber{ch: make(chan *Message, 1)}
-	m.subscribers[channel] = append(m.subscribers[channel], sub)
-	return sub, nil
+	ch := make(chan *Message, 1)
+	m.subscribers[channel] = ch
+	return ch, nil
+}
+
+func (m *mockPubsub) Close() error {
+	return nil
 }
 
 func TestManager(t *testing.T) {
 	t.Run("registration and unregistration", func(t *testing.T) {
 		pubsub := newMockPubSub()
-		manager := NewManager(WithPubSub(pubsub))
+		manager := NewManager(WithSubscriber(pubsub))
 		defer manager.Stop()
 
 		channel := "test-channel"
@@ -88,7 +79,7 @@ func TestManager(t *testing.T) {
 
 	t.Run("closes all broadcasters after manager stops", func(t *testing.T) {
 		pubsub := newMockPubSub()
-		manager := NewManager(WithPubSub(pubsub))
+		manager := NewManager(WithSubscriber(pubsub))
 
 		manager.RegisterClient("channel1", "1")
 		manager.RegisterClient("channel2", "1")
@@ -104,7 +95,7 @@ func TestManager(t *testing.T) {
 
 	t.Run("stop single broadcaster", func(t *testing.T) {
 		pubsub := newMockPubSub()
-		manager := NewManager(WithPubSub(pubsub))
+		manager := NewManager(WithSubscriber(pubsub))
 
 		manager.RegisterClient("channel1", "1")
 		if len(manager.activeBroadcasters) != 1 {
@@ -119,7 +110,7 @@ func TestManager(t *testing.T) {
 
 	t.Run("concurrent access", func(t *testing.T) {
 		pubsub := newMockPubSub()
-		manager := NewManager(WithPubSub(pubsub))
+		manager := NewManager(WithSubscriber(pubsub))
 		defer manager.Stop()
 
 		var wg sync.WaitGroup

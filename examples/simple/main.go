@@ -21,7 +21,7 @@ func main() {
 	adapter := inmemmoryadapter.New()
 
 	manager := broadcaster.NewManager(
-		broadcaster.WithPubSub(adapter),
+		broadcaster.WithSubscriber(adapter),
 		broadcaster.WithInitialBackoff(1*time.Second),
 		broadcaster.WithMaxBackoff(10*time.Second),
 		broadcaster.WithClientBufferSize(10),
@@ -37,14 +37,14 @@ func main() {
 		wg.Add(1)
 		go func(clientID int) {
 			defer wg.Done()
-			channel := channels[rand.Intn(len(channels))]
-			logger.Info("Client subscribed", "client_id", clientID, "channel", channel)
+			topic := channels[rand.Intn(len(channels))]
+			logger.Info("Client subscribed", "client_id", clientID, "topic", topic)
 
-			clientChan := manager.RegisterClient(channel, fmt.Sprint(clientID))
-			defer manager.UnregisterClient(channel, fmt.Sprint(clientID))
+			clientChan := manager.RegisterClient(topic, fmt.Sprint(clientID))
+			defer manager.UnregisterClient(topic, fmt.Sprint(clientID))
 
 			for msg := range clientChan {
-				logger.Info("Client received message", "client_id", clientID, "channel", channel, "message", string(msg))
+				logger.Info("Client received message", "client_id", clientID, "topic", topic, "message", string(msg))
 			}
 		}(i)
 	}
@@ -57,9 +57,9 @@ func main() {
 		for {
 			select {
 			case <-ticker.C:
-				channel := channels[rand.Intn(len(channels))]
-				message := fmt.Sprintf("Update for %s", channel)
-				if err := adapter.Publish(context.Background(), channel, message); err != nil {
+				topic := channels[rand.Intn(len(channels))]
+				message := fmt.Sprintf("Update for %s", topic)
+				if err := adapter.Publish(context.Background(), topic, message); err != nil {
 					logger.Error("Failed to publish message", "error", err)
 				}
 			case <-manager.ServiceContext().Done():
