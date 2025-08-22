@@ -17,17 +17,15 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-
-	redisClient := redis_v8.NewClient(&redis_v8.Options{
-		Addr:        "",
-		PoolTimeout: 5 * time.Second,
-		Password:    "",
-		DB:          0,
-		PoolSize:    10,
-	})
-
-	adapter := redisv8adapter.New(redisClient)
+	adapter := redisv8adapter.New(
+		redis_v8.NewClient(&redis_v8.Options{
+			Addr:        "",
+			PoolTimeout: 5 * time.Second,
+			Password:    "",
+			DB:          0,
+			PoolSize:    10,
+		}),
+	)
 
 	manager := broadcaster.NewManager(
 		broadcaster.WithSubscriber(adapter),
@@ -44,7 +42,7 @@ func main() {
 	var wg sync.WaitGroup
 
 	// -- five clients subscribe to one of the three topics at random --
-
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		go func(clientID int) {
