@@ -2,7 +2,10 @@ module github.com/ostheperson/pubsub-broadcaster
 
 go 1.22.6
 
-require github.com/redis/go-redis/v9 v9.12.0
+require (
+	github.com/go-redis/redis/v8 v8.11.5
+	github.com/redis/go-redis/v9 v9.12.0
+)
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

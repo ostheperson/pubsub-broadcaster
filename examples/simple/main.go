@@ -11,21 +11,23 @@ import (
 	"syscall"
 	"time"
 
+	redis_v8 "github.com/go-redis/redis/v8"
 	broadcaster "github.com/ostheperson/pubsub-broadcaster"
-	redisadapter "github.com/ostheperson/pubsub-broadcaster/adapter/redis"
-	"github.com/redis/go-redis/v9"
-	// inmemmoryadapter "github.com/ostheperson/pubsub-broadcaster/adapter/inmemory"
+	redisv8adapter "github.com/ostheperson/pubsub-broadcaster/adapter/redisv8"
 )
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	adapter := redisadapter.New(redis.NewClient(&redis.Options{
+
+	redisClient := redis_v8.NewClient(&redis_v8.Options{
 		Addr:        "",
 		PoolTimeout: 5 * time.Second,
 		Password:    "",
 		DB:          0,
 		PoolSize:    10,
-	}))
+	})
+
+	adapter := redisv8adapter.New(redisClient)
 
 	manager := broadcaster.NewManager(
 		broadcaster.WithSubscriber(adapter),
@@ -34,6 +36,7 @@ func main() {
 		broadcaster.WithClientBufferSize(10),
 		broadcaster.WithChannelSendTimeout(200*time.Millisecond),
 	)
+
 	manager.Start()
 	defer manager.Stop()
 
@@ -68,7 +71,7 @@ func main() {
 			case <-ticker.C:
 				topic := channels[rand.Intn(len(channels))]
 				message := fmt.Sprintf("Update for %s", topic)
-				if err := adapter.Publish(context.Background(), topic, message); err != nil {
+				if err := adapter.Publish(context.Background(), topic, []byte(message)); err != nil {
 					logger.Error("Failed to publish message", "error", err)
 				}
 			case <-manager.ServiceContext().Done():

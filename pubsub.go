@@ -15,6 +15,6 @@ type Subscriber interface {
 }
 
 type Publisher interface {
-	Publish(ctx context.Context, channel string, payload any) error
+	Publish(ctx context.Context, channel string, payload []byte) error
 	Close() error
 }
