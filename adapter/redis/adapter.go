@@ -6,14 +6,13 @@ import (
 	"fmt"
 
 	broadcaster "github.com/ostheperson/pubsub-broadcaster"
-	"github.com/redis/go-redis/v9"
 )
 
 type Adapter struct {
-	client *redis.Client
+	client RedisClient
 }
 
-func New(client *redis.Client) *Adapter {
+func New(client RedisClient) *Adapter {
 	return &Adapter{client: client}
 }
 
