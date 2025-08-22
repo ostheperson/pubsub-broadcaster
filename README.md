@@ -1,8 +1,8 @@
-# pubsub Broadcaster
+# pub/sub Broadcaster
 
-A simple Go library for fanning out pubsub messages to many clients. **Manager** creates and manages broadcasters. **Broadcaster** grabs messages from a subscriber and sends them to all clients.
+This library implements a pub/sub message broadcasting system. A Manager creates and manages Broadcaster instances. Each Broadcaster handles a specific topic. A Broadcaster receives messages from a Subscriber interface, which connects to an external pub/sub system. Messages are then sent to all registered in-memory clients for that topic. The system includes reconnection logic for pub/sub disconnections and removes broadcasters when they have no active clients.
 
-## Supported pubsub Systems
+## Supported pub/sub Systems
 
 *   [x] any system that can implement the subscriber interface
 
@@ -10,11 +10,13 @@ A simple Go library for fanning out pubsub messages to many clients. **Manager**
 
 The system is designed to be robust and handle common failures gracefully.
 
-*   **pubsub Disconnection:** If the connection to the pubsub system is lost, it attempts to reconnect using an exponential backoff. Once the pubsub system is available again, the connection is re-established, and message flow resumes.
+*   **pub/sub Disconnection:** If the connection to the pub/sub system is lost, it attempts to reconnect using an exponential backoff. Once the pub/sub system is available again, the connection is re-established, and message flow resumes.
 
-*   **Resource Management:** If a broadcaster loses its last client, its pubsub subscription is shutsdown and signals the manager to be removed.
+*   **Resource Management:** If a broadcaster loses its last client, its pub/sub subscription is shutsdown and signals the manager to be removed.
 
 *   **Graceful Shutdown:** The entire system can be shut down cleanly, ensuring all connections are closed and goroutines are terminated without leaks.
+
+*   **Adapter Version Decoupling:** The library's adapter interfaces allow users to provide their own pub/sub client implementations, decoupling the library from specific external package versions.
 
 ## Quick Start
 
@@ -30,8 +32,8 @@ manager.Start()
 defer manager.Stop()
 
 // 3. Add a client to a topic
-clientChan := manager.RegisterClient("my-topic", 1)
-defer manager.UnregisterClient("my-topic", 1)
+clientChan := manager.RegisterClient("my-topic", "client_id")
+defer manager.UnregisterClient("my-topic", "client_id")
 
 // 4. Listen for messages
 go func() {
